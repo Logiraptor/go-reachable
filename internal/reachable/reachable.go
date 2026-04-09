@@ -221,9 +221,16 @@ func buildReachableIndex(funcs []callgraph.ReachableFunc) map[string]callgraph.R
 // qualifyPackage converts a directory-relative package path to a full Go import
 // path using the module path from go.mod.
 //
+// For paths under vendor/, the vendor/ prefix is stripped and the remainder is
+// the full import path already (e.g. "vendor/github.com/jackc/pgx/v5" →
+// "github.com/jackc/pgx/v5").
+//
 // Example: modulePath="github.com/grafana/loki/v3", relPkg="pkg/querier"
 // → "github.com/grafana/loki/v3/pkg/querier"
 func qualifyPackage(modulePath, relPkg string) string {
+	if strings.HasPrefix(relPkg, "vendor/") {
+		return strings.TrimPrefix(relPkg, "vendor/")
+	}
 	if relPkg == "." || relPkg == "" {
 		return modulePath
 	}
