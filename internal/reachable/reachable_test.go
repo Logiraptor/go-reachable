@@ -26,8 +26,8 @@ func TestAnalyzePathsRejectsMultiCHA(t *testing.T) {
 	_, err := AnalyzePaths(MultiOptions{
 		Algorithm: callgraph.AlgoCHA,
 		PathQueries: []PathQuery{
-			{Name: "a", Entry: callgraph.EntryPoint{Package: "p", Func: "f"}},
-			{Name: "b", Entry: callgraph.EntryPoint{Package: "p", Func: "g"}},
+			{Name: "a", Entries: []callgraph.EntryPoint{{Package: "p", Func: "f"}}},
+			{Name: "b", Entries: []callgraph.EntryPoint{{Package: "p", Func: "g"}}},
 		},
 	}, nil)
 	if err == nil {

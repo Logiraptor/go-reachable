@@ -33,6 +33,73 @@ paths:
 	}
 }
 
+func TestLoadMultiSymbol(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, ".reachable.yaml")
+	content := `
+version: 1
+vta:
+  package: example.com/app/cmd/server
+paths:
+  - name: api
+    symbols:
+      - package: example.com/app/pkg/api
+        recv: "*Handler"
+        func: handleCreate
+      - package: example.com/app/pkg/api
+        recv: "*Handler"
+        func: handleList
+`
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	c, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(c.Paths) != 1 {
+		t.Fatalf("paths count: got %d want 1", len(c.Paths))
+	}
+	syms := c.Paths[0].SymbolSpecs()
+	if len(syms) != 2 {
+		t.Fatalf("symbol count: got %d want 2", len(syms))
+	}
+	if syms[0].Func != "handleCreate" || syms[1].Func != "handleList" {
+		t.Fatalf("symbols: %+v", syms)
+	}
+}
+
+func TestValidateMixedInlineAndSymbols(t *testing.T) {
+	c := &Config{
+		VTA:   VTAConfig{Package: "x"},
+		Paths: []PathSpec{{Name: "a", Package: "p", Func: "f", Symbols: []SymbolSpec{{Package: "p", Func: "g"}}}},
+	}
+	if err := c.Validate(); err == nil {
+		t.Fatal("expected error for mixed inline and symbols")
+	}
+}
+
+func TestValidateSymbolsMissingFunc(t *testing.T) {
+	c := &Config{
+		VTA:   VTAConfig{Package: "x"},
+		Paths: []PathSpec{{Name: "a", Symbols: []SymbolSpec{{Package: "p"}}}},
+	}
+	if err := c.Validate(); err == nil {
+		t.Fatal("expected error for symbol missing func")
+	}
+}
+
+func TestSymbolSpecsInline(t *testing.T) {
+	p := PathSpec{Name: "a", Package: "p", Recv: "*T", Func: "f"}
+	syms := p.SymbolSpecs()
+	if len(syms) != 1 {
+		t.Fatalf("got %d symbols, want 1", len(syms))
+	}
+	if syms[0].Package != "p" || syms[0].Recv != "*T" || syms[0].Func != "f" {
+		t.Fatalf("unexpected: %+v", syms[0])
+	}
+}
+
 func TestValidateMissingVTAPackage(t *testing.T) {
 	c := &Config{
 		Paths: []PathSpec{{Name: "a", Package: "p", Func: "f"}},

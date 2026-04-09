@@ -182,13 +182,18 @@ func runPaths(repoDir, configPath, outputFmt string, algorithm callgraph.Algorit
 
 	queries := make([]reachable.PathQuery, 0, len(cfg.Paths))
 	for _, p := range cfg.Paths {
+		syms := p.SymbolSpecs()
+		entries := make([]callgraph.EntryPoint, 0, len(syms))
+		for _, s := range syms {
+			entries = append(entries, callgraph.EntryPoint{
+				Package:  s.Package,
+				Receiver: s.Recv,
+				Func:     s.Func,
+			})
+		}
 		queries = append(queries, reachable.PathQuery{
-			Name: p.Name,
-			Entry: callgraph.EntryPoint{
-				Package:  p.Package,
-				Receiver: p.Recv,
-				Func:     p.Func,
-			},
+			Name:    p.Name,
+			Entries: entries,
 		})
 	}
 

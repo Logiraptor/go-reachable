@@ -22,12 +22,31 @@ type VTAConfig struct {
 	Func    string `yaml:"func"`
 }
 
-// PathSpec is one named reachability query root.
-type PathSpec struct {
-	Name    string `yaml:"name"`
+// SymbolSpec identifies a single function or method as a reachability root.
+type SymbolSpec struct {
 	Package string `yaml:"package"`
 	Recv    string `yaml:"recv"`
 	Func    string `yaml:"func"`
+}
+
+// PathSpec is one named reachability query root. It may contain a single symbol
+// (package/recv/func at top level) or multiple symbols via the symbols list.
+type PathSpec struct {
+	Name    string       `yaml:"name"`
+	Package string       `yaml:"package"`
+	Recv    string       `yaml:"recv"`
+	Func    string       `yaml:"func"`
+	Symbols []SymbolSpec `yaml:"symbols"`
+}
+
+// SymbolSpecs returns the resolved list of symbols for this path. If the
+// top-level package/func fields are set, they are returned as a single-element
+// list; otherwise the symbols list is returned directly.
+func (p PathSpec) SymbolSpecs() []SymbolSpec {
+	if p.Package != "" || p.Func != "" {
+		return []SymbolSpec{{Package: p.Package, Recv: p.Recv, Func: p.Func}}
+	}
+	return p.Symbols
 }
 
 const configFileDot = ".reachable.yaml"
@@ -61,11 +80,29 @@ func (c *Config) Validate() error {
 		if strings.TrimSpace(p.Name) == "" {
 			return fmt.Errorf("config: paths[%d].name is required", i)
 		}
-		if strings.TrimSpace(p.Package) == "" {
-			return fmt.Errorf("config: paths[%d].package is required", i)
+		hasInline := strings.TrimSpace(p.Package) != "" || strings.TrimSpace(p.Func) != ""
+		hasSymbols := len(p.Symbols) > 0
+		if hasInline && hasSymbols {
+			return fmt.Errorf("config: paths[%d] (%s): use either package/func or symbols, not both", i, p.Name)
 		}
-		if strings.TrimSpace(p.Func) == "" {
-			return fmt.Errorf("config: paths[%d].func is required", i)
+		if !hasInline && !hasSymbols {
+			return fmt.Errorf("config: paths[%d] (%s): package/func or symbols is required", i, p.Name)
+		}
+		if hasInline {
+			if strings.TrimSpace(p.Package) == "" {
+				return fmt.Errorf("config: paths[%d] (%s): package is required", i, p.Name)
+			}
+			if strings.TrimSpace(p.Func) == "" {
+				return fmt.Errorf("config: paths[%d] (%s): func is required", i, p.Name)
+			}
+		}
+		for j, s := range p.Symbols {
+			if strings.TrimSpace(s.Package) == "" {
+				return fmt.Errorf("config: paths[%d] (%s).symbols[%d]: package is required", i, p.Name, j)
+			}
+			if strings.TrimSpace(s.Func) == "" {
+				return fmt.Errorf("config: paths[%d] (%s).symbols[%d]: func is required", i, p.Name, j)
+			}
 		}
 	}
 	if strings.TrimSpace(c.VTA.Package) == "" {

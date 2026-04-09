@@ -39,10 +39,10 @@ type VTAAnchor struct {
 	Func    string `json:"func"`
 }
 
-// PathQuery pairs a stable name with a reachability entry point.
+// PathQuery pairs a stable name with one or more reachability entry points.
 type PathQuery struct {
-	Name  string
-	Entry callgraph.EntryPoint
+	Name    string
+	Entries []callgraph.EntryPoint
 }
 
 // MultiOptions configures multi-path analysis (one graph build, many walks).
@@ -56,12 +56,12 @@ type MultiOptions struct {
 
 // PathResult is reachability for one named path.
 type PathResult struct {
-	Name               string               `json:"name"`
-	Entry              callgraph.EntryPoint `json:"entry"`
-	Touched            bool                 `json:"touched"`
-	Matches            []Match              `json:"matches,omitempty"`
-	WalkTime           time.Duration        `json:"walk_time"`
-	ReachableFunctions int                  `json:"reachable_functions"`
+	Name               string                 `json:"name"`
+	Entries            []callgraph.EntryPoint `json:"entries"`
+	Touched            bool                   `json:"touched"`
+	Matches            []Match                `json:"matches,omitempty"`
+	WalkTime           time.Duration          `json:"walk_time"`
+	ReachableFunctions int                    `json:"reachable_functions"`
 }
 
 // MultiResult is the full multi-path output.
@@ -148,22 +148,29 @@ func AnalyzePaths(opts MultiOptions, symbols []diffsyms.Symbol) (MultiResult, er
 	out.Paths = make([]PathResult, 0, len(opts.PathQueries))
 
 	for _, q := range opts.PathQueries {
-		reachableFuncs, walkTime, err := callgraph.ReachableFrom(a, q.Entry)
-		if err != nil {
-			return out, fmt.Errorf("path %q: %w", q.Name, err)
-		}
-		sumWalk += walkTime
+		var allReachable []callgraph.ReachableFunc
+		var pathWalk time.Duration
 
-		index := buildReachableIndex(reachableFuncs)
+		for _, entry := range q.Entries {
+			reachableFuncs, walkTime, err := callgraph.ReachableFrom(a, entry)
+			if err != nil {
+				return out, fmt.Errorf("path %q: %w", q.Name, err)
+			}
+			allReachable = append(allReachable, reachableFuncs...)
+			pathWalk += walkTime
+		}
+		sumWalk += pathWalk
+
+		index := buildReachableIndex(allReachable)
 		matches, touched := matchChangedSymbols(modulePath, index, symbols)
 
 		out.Paths = append(out.Paths, PathResult{
 			Name:               q.Name,
-			Entry:              q.Entry,
+			Entries:            q.Entries,
 			Touched:            touched,
 			Matches:            matches,
-			WalkTime:           walkTime,
-			ReachableFunctions: len(reachableFuncs),
+			WalkTime:           pathWalk,
+			ReachableFunctions: len(index),
 		})
 	}
 
